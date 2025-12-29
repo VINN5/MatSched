@@ -23,14 +23,26 @@ const activeRoutes = new Set();
 const assignedVehicles = new Set();
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000; // Render assigns a port via process.env.PORT
 
 // === HTTP SERVER ===
 const server = http.createServer(app);
 
-// === CORS — Allow both 3000 & 3001 ===
+// === CORS — Allow localhost (dev) + live frontend (production) ===
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://matsched.onrender.com'  // Your live frontend URL
+];
+
 const corsOptions = {
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -244,11 +256,11 @@ cron.schedule('* * * * *', async () => {
 console.log('CRON JOB ACTIVE: Vehicles return automatically after round trip');
 
 // === START SERVER ===
-server.listen(port, () => {
-  console.log(`Server + Socket.IO + MPesa Daraja (SANDBOX) running at http://localhost:${port}`);
-  console.log(`Frontend: http://localhost:3000`);
-  console.log(`TEST MPESA: http://localhost:${port}/test-mpesa`);
-  console.log(`MPESA CALLBACK URL: ${process.env.MPESA_CALLBACK_URL}`);
+server.listen(port, '0.0.0.0', () => {
+  console.log(`Server + Socket.IO + MPesa Daraja (SANDBOX) running on port ${port}`);
+  console.log(`API URL: https://matsched-backend.onrender.com`);
+  console.log(`TEST MPESA: https://matsched-backend.onrender.com/test-mpesa`);
+  console.log(`MPESA CALLBACK URL: ${process.env.MPESA_CALLBACK_URL || 'Not set'}`);
   console.log(`SOCKET.IO READY — Real-time seat updates active`);
   console.log(`DRIVER QUEUE SYSTEM ACTIVE — Dynamic assignment, no overlap`);
   console.log(`VEHICLE RETURN CRON: Every minute`);
