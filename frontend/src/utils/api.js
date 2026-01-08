@@ -2,8 +2,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  // Use environment variable if available (production), fallback to localhost (development)
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
+  // Use CRA env var, fallback to localhost for local dev
+  baseURL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000/api',
   withCredentials: true,
 });
 
