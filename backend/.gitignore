@@ -1,2 +1,28 @@
+# Dependencies
 node_modules/
-.env
+
+# Environment variables
+.env                # Local development (default)
+.env.local          # Vite also ignores this by default, but good to include
+.env.development    # Development overrides
+.env.production     # Production overrides (important: do NOT commit this!)
+.env.staging        # If you ever add a staging env
+
+# Vite/React build output
+dist/
+build/
+
+# Logs and caches
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Editor directories and files
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

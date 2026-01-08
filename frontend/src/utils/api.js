@@ -2,8 +2,9 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'http://localhost:3000/api',
-  withCredentials: true
+  // Use environment variable if available (production), fallback to localhost (development)
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
