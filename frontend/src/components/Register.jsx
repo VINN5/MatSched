@@ -1,13 +1,14 @@
+// frontend/src/components/Register.jsx
 import { useState } from 'react';
-import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
+import api from '../utils/api';  // ← Use the shared api instance
 
 export default function Register() {
   const [form, setForm] = useState({
     name: '',
     email: '',
     password: '',
-    phone: '',           // ← ADDED
+    phone: '',
     role: 'passenger'    // ← Default
   });
   const [error, setError] = useState('');
@@ -17,13 +18,12 @@ export default function Register() {
     e.preventDefault();
     setError('');
     try {
-      const res = await axios.post('http://localhost:3000/api/auth/register', form);
+      const res = await api.post('/auth/register', form);  // ← Correct: uses VITE_API_BASE_URL
       const { token, user } = res.data;
 
       // Save to localStorage
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
 
       // REDIRECT BASED ON ROLE
       if (user.role === 'sacco_admin') navigate('/admin');
@@ -96,7 +96,10 @@ export default function Register() {
       </form>
 
       <p className="text-center mt-4">
-        Already have an account? <Link to="/login" className="text-blue-600 hover:underline">Login</Link>
+        Already have an account?{' '}
+        <Link to="/login" className="text-blue-600 hover:underline">
+          Login
+        </Link>
       </p>
     </div>
   );
