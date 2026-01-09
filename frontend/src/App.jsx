@@ -1,15 +1,15 @@
-// src/App.js
+// src/App.jsx
 import { Routes, Route, Navigate } from 'react-router-dom';
-import Login from './components/Login';
-import Register from './components/Register';
-import Home from './components/Home';
-import AdminDashboard from './components/AdminDashboard';
-import DriverDashboard from './components/DriverDashboard';
-import PassengerDashboard from './components/PassengerDashboard';
-import ForgotPassword from './components/ForgotPassword';
-import ResetPassword from './components/ResetPassword';
+import Login from './components/Login.jsx';
+import Register from './components/Register.jsx';
+import Home from './components/Home.jsx';
+import AdminDashboard from './components/AdminDashboard.jsx';
+import DriverDashboard from './components/DriverDashboard.jsx';
+import PassengerDashboard from './components/PassengerDashboard.jsx';
+import ForgotPassword from './components/ForgotPassword.jsx';
+import ResetPassword from './components/ResetPassword.jsx';
 import { useState, useEffect } from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext.jsx';
 
 function AppContent() {
   const { user, logout } = useAuth();
@@ -84,7 +84,7 @@ function AppContent() {
         <Route 
           path="/passenger" 
           element={user?.role === 'passenger' ? <PassengerDashboard user={user} /> : <Navigate to="/" />} 
-        /> {/* ← FIXED: Added closing ) */}
+        />
       </Routes>
     </div>
   );

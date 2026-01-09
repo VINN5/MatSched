@@ -1,9 +1,8 @@
-// src/utils/api.js
+// frontend/src/utils/api.js
 import axios from 'axios';
 
 const api = axios.create({
-  // Use CRA env var, fallback to localhost for local dev
-  baseURL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:3000/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
   withCredentials: true,
 });
 
