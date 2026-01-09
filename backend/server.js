@@ -1,4 +1,4 @@
-// server.js
+// backend/server.js
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -12,7 +12,7 @@ const saccoRoutes = require('./routes/saccos');
 const logger = require('./middleware/logger');
 const cors = require('cors');
 const searchRoutes = require('./routes/search');
-const mpesaRoutes = require('./routes/mpesa'); // ← MPESA DARAJA
+const mpesaRoutes = require('./routes/mpesa');
 const cron = require('node-cron');
 const Schedule = require('./models/schedule');
 const Vehicle = require('./models/vehicle');
@@ -28,9 +28,9 @@ const port = process.env.PORT || 3000;
 // === HTTP SERVER ===
 const server = http.createServer(app);
 
-// === CORS — Allow both 3000 & 3001 ===
+// === CORS — Allow frontend domains ===
 const corsOptions = {
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
+  origin: ['http://localhost:3001', 'https://matsched.onrender.com'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -53,12 +53,12 @@ app.use(logger);
 // === DATABASE ===
 connectDB();
 
-// === ROUTES ===
-app.use('/api/auth', authRoutes);
+// === ROUTES — Mount all under /api ===
+app.use('/api/auth', authRoutes);          // ← /api/auth/register & /api/auth/login
 app.use('/api/schedules', scheduleRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/search', searchRoutes);
-app.use('/api/mpesa', mpesaRoutes);         // ← MPESA DARAJA
+app.use('/api/mpesa', mpesaRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/admin/saccos', saccoRoutes);
 app.use('/api/driver', require('./routes/driver'));
@@ -246,7 +246,7 @@ console.log('CRON JOB ACTIVE: Vehicles return automatically after round trip');
 // === START SERVER ===
 server.listen(port, () => {
   console.log(`Server + Socket.IO + MPesa Daraja (SANDBOX) running at http://localhost:${port}`);
-  console.log(`Frontend: http://localhost:3000`);
+  console.log(`Frontend: http://localhost:3001`);
   console.log(`TEST MPESA: http://localhost:${port}/test-mpesa`);
   console.log(`MPESA CALLBACK URL: ${process.env.MPESA_CALLBACK_URL}`);
   console.log(`SOCKET.IO READY — Real-time seat updates active`);
