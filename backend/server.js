@@ -33,7 +33,7 @@ const corsOptions = {
   origin: [
     'http://localhost:3001',
     'https://matsched-frontend.onrender.com',
-    'https://matsched-backend.onrender.com'
+    'https://matsched.onrender.com'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
