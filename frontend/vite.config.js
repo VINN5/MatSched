@@ -11,4 +11,9 @@ export default defineConfig({
   server: {
     port: 3001,
   },
+  define: {
+    'import.meta.env.VITE_API_BASE_URL': JSON.stringify(
+      process.env.VITE_API_BASE_URL || 'https://matsched.onrender.com/api'
+    )
+  }
 })
