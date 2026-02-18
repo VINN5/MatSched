@@ -54,7 +54,7 @@ const PassengerDashboard = () => {
     setLoading(true);
     try {
       const res = await axios.post(
-        'http://localhost:3000/api/schedules/smart',
+        `${import.meta.env.VITE_API_BASE_URL}/schedules/smart`,
         { from, to },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -77,7 +77,7 @@ const PassengerDashboard = () => {
   useEffect(() => {
     if (!token || socketRef.current) return;
 
-    const socket = io('http://localhost:3000', {
+    const socket = io(import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'https://matsched.onrender.com', {
       withCredentials: true,
       auth: { token }
     });
@@ -177,7 +177,7 @@ const initiateSegmentPayment = async () => {
 
   try {
     const response = await axios.post(
-      'http://localhost:3000/api/mpesa/stkpush',
+      `${import.meta.env.VITE_API_BASE_URL}/mpesa/stkpush`,
       {
         phone: phone,
         amount: totalAmount,

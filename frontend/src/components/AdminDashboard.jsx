@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { io } from 'socket.io-client';
-// src/components/AdminDashboard.js
 import {
   MapPin, AlertCircle, CheckCircle, X, Car, Route, Calendar, ArrowRight,
   Loader2, Edit2, Trash2, Plus, Minus, TrendingUp
@@ -172,7 +171,9 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!token || !saccoId) return;
 
-    const socket = io('http://localhost:3000', { withCredentials: true });
+    const socket = io(import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'https://matsched.onrender.com', { 
+      withCredentials: true 
+    });
     socket.emit('join-sacco', saccoId);
 
     socket.on('vehicle-returned', (data) => {
@@ -236,32 +237,32 @@ export default function AdminDashboard() {
     }
   };
 
- const handleScheduleSubmit = async (e) => {
-  e.preventDefault();
+  const handleScheduleSubmit = async (e) => {
+    e.preventDefault();
 
-  // === VALIDATE ===
-  if (!formSchedule.routeId || !formSchedule.vehicleId || !formSchedule.departureTime) {
-    showToast('Please fill all fields', 'error');
-    return;
-  }
+    // === VALIDATE ===
+    if (!formSchedule.routeId || !formSchedule.vehicleId || !formSchedule.departureTime) {
+      showToast('Please fill all fields', 'error');
+      return;
+    }
 
-  // === RENAME KEYS TO MATCH BACKEND ===
-  const payload = {
-    route: formSchedule.routeId,
-    vehicle: formSchedule.vehicleId,
-    departureTime: formSchedule.departureTime,
-    isRoundTrip: formSchedule.isRoundTrip
+    // === RENAME KEYS TO MATCH BACKEND ===
+    const payload = {
+      route: formSchedule.routeId,
+      vehicle: formSchedule.vehicleId,
+      departureTime: formSchedule.departureTime,
+      isRoundTrip: formSchedule.isRoundTrip
+    };
+
+    try {
+      await api.post('/admin/schedules', payload);
+      showToast('Schedule created!', 'success');
+      setFormSchedule({ routeId: '', vehicleId: '', departureTime: '', isRoundTrip: true });
+      fetchData();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to create schedule', 'error');
+    }
   };
-
-  try {
-    await api.post('/admin/schedules', payload);
-    showToast('Schedule created!', 'success');
-    setFormSchedule({ routeId: '', vehicleId: '', departureTime: '', isRoundTrip: true });
-    fetchData();
-  } catch (err) {
-    showToast(err.response?.data?.message || 'Failed to create schedule', 'error');
-  }
-};
 
   // === RENDER ===
   if (!token) return <div className="p-6 text-center text-red-600">Not authenticated</div>;
