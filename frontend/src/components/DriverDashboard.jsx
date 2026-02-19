@@ -2,14 +2,27 @@
 import { useState, useEffect, useRef } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { Package, Clock, DollarSign, AlertCircle, CheckCircle, X, QrCode, Navigation } from 'lucide-react';
+import {
+  Package, Clock, DollarSign, AlertCircle, CheckCircle, X, QrCode, Navigation,
+  Users, Play, Square, MapPin, Phone, TrendingUp, History, Car, ChevronRight
+} from 'lucide-react';
 import QrScanner from 'qr-scanner';
 
 export default function DriverDashboard() {
   const { user } = useAuth();
   const [schedule, setSchedule] = useState(null);
   const [parcels, setParcels] = useState([]);
-  const [earnings, setEarnings] = useState(0);
+  const [earnings, setEarnings] = useState({
+    today: 0,
+    tripEarnings: 0,
+    parcelEarnings: 0,
+    tripCount: 0,
+    parcelCount: 0,
+    passengers: 0
+  });
+  const [history, setHistory] = useState([]);
+  const [vehicle, setVehicle] = useState(null);
+  const [activeTab, setActiveTab] = useState('current'); // current, history, earnings
   const [showScanner, setShowScanner] = useState(false);
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,27 +36,77 @@ export default function DriverDashboard() {
   };
 
   // === FETCH DATA ===
+  const fetchData = async () => {
+    try {
+      const [schedRes, parcelRes, earnRes, vehicleRes] = await Promise.all([
+        api.get('/driver/schedule'),
+        api.get('/driver/parcels'),
+        api.get('/driver/earnings'),
+        api.get('/driver/vehicle').catch(() => ({ data: null }))
+      ]);
+      setSchedule(schedRes.data);
+      setParcels(parcelRes.data);
+      setEarnings(earnRes.data);
+      setVehicle(vehicleRes.data);
+    } catch (err) {
+      showToast('Failed to load data', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      const res = await api.get('/driver/history');
+      setHistory(res.data.history || []);
+    } catch (err) {
+      console.error('History error:', err);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [schedRes, parcelRes, earnRes] = await Promise.all([
-          api.get('/driver/schedule'),
-          api.get('/driver/parcels'),
-          api.get('/driver/earnings')
-        ]);
-        setSchedule(schedRes.data);
-        setParcels(parcelRes.data);
-        setEarnings(earnRes.data.today || 0);
-      } catch (err) {
-        showToast('Failed to load data', 'error');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
-  // === QR SCANNER LOGIC ===
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchHistory();
+    }
+  }, [activeTab]);
+
+  // === TRIP ACTIONS ===
+  const startTrip = async () => {
+    try {
+      await api.post('/driver/trip/start');
+      showToast('Trip started!', 'success');
+      fetchData();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to start trip', 'error');
+    }
+  };
+
+  const completeTrip = async () => {
+    if (!window.confirm('Complete this trip and return to base?')) return;
+    try {
+      const res = await api.post('/driver/trip/complete');
+      showToast(`Trip completed! Earned KES ${res.data.earnings}`, 'success');
+      fetchData();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to complete trip', 'error');
+    }
+  };
+
+  const markBoarded = async (bookingId) => {
+    try {
+      await api.post(`/driver/passenger/board/${bookingId}`);
+      showToast('Passenger marked as boarded', 'success');
+      fetchData();
+    } catch (err) {
+      showToast('Failed to mark boarded', 'error');
+    }
+  };
+
+  // === QR SCANNER ===
   const startScanner = () => {
     if (!videoRef.current) return;
     qrScanner = new QrScanner(
@@ -71,158 +134,448 @@ export default function DriverDashboard() {
   };
 
   useEffect(() => {
-    if (showScanner) {
-      startScanner();
-    }
+    if (showScanner) startScanner();
     return () => stopScanner();
   }, [showScanner]);
 
-  // === VERIFY BOOKING ===
   const verifyBooking = async (bookingId) => {
     try {
-      await api.post('/driver/verify', { bookingId });
-      showToast('Passenger verified!', 'success');
+      const res = await api.post('/driver/verify', { bookingId });
+      showToast(`${res.data.passenger?.name} verified!`, 'success');
+      fetchData();
     } catch (err) {
-      showToast('Invalid QR code', 'error');
+      showToast(err.response?.data?.message || 'Invalid QR code', 'error');
+    }
+  };
+
+  // === PARCEL ===
+  const markDelivered = async (id) => {
+    try {
+      const res = await api.post(`/driver/parcel/delivered/${id}`);
+      setParcels(parcels.filter(p => p._id !== id));
+      showToast(`+KES ${res.data.fee} earned!`, 'success');
+      fetchData();
+    } catch (err) {
+      showToast('Failed', 'error');
     }
   };
 
   // === SOS ===
   const sendSOS = async () => {
+    if (!window.confirm('Send EMERGENCY SOS to Sacco control?')) return;
     try {
-      await api.post('/driver/sos');
-      showToast('SOS sent!', 'success');
+      await api.post('/driver/sos', {
+        location: 'GPS data here', // TODO: Get actual GPS
+        issue: 'Emergency assistance needed'
+      });
+      showToast('🚨 SOS sent to Sacco!', 'success');
     } catch (err) {
-      showToast('Failed', 'error');
-    }
-  };
-
-  // === MARK DELIVERED ===
-  const markDelivered = async (id) => {
-    try {
-      const res = await api.post(`/driver/parcel/delivered/${id}`);
-      setParcels(parcels.filter(p => p._id !== id));
-      setEarnings(prev => prev + res.data.fee);
-      showToast(`+KES ${res.data.fee} earned!`, 'success');
-    } catch (err) {
-      showToast('Failed', 'error');
+      showToast('Failed to send SOS', 'error');
     }
   };
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto p-6 text-center">
-        <p className="text-lg animate-pulse">Loading your dashboard...</p>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 to-purple-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 p-4 md:p-6">
       {/* TOAST */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 p-4 rounded-xl text-white flex items-center gap-2 shadow-lg ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-xl text-white flex items-center gap-3 shadow-2xl ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
           {toast.type === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
-          <span>{toast.msg}</span>
+          <span className="font-medium">{toast.msg}</span>
         </div>
       )}
 
       {/* HEADER */}
-      <div className="max-w-4xl mx-auto mb-6">
-        <h1 className="text-3xl font-bold text-indigo-700">Driver Dashboard</h1>
-        <p className="text-gray-600">Welcome, {user.name}!</p>
-      </div>
-
-      {/* EARNINGS */}
-      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 mb-6">
-        <div className="flex items-center justify-between">
+      <div className="max-w-6xl mx-auto mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <p className="text-gray-600">Today's Earnings</p>
-            <p className="text-4xl font-bold text-green-600">KES {earnings}</p>
+            <h1 className="text-3xl md:text-4xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+              Driver Dashboard
+            </h1>
+            <p className="text-gray-600 mt-1">Welcome back, {user.name}!</p>
           </div>
-          <DollarSign className="h-12 w-12 text-green-600" />
+          {vehicle && (
+            <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-xl shadow-lg">
+              <Car className="h-6 w-6 text-indigo-600" />
+              <div>
+                <p className="font-bold text-gray-800">{vehicle.plate}</p>
+                <p className="text-xs text-gray-500">{vehicle.type} • {vehicle.capacity} seats</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* CURRENT TRIP */}
-      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 mb-6">
-        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-          <Navigation className="h-5 w-5" /> Current Trip
-        </h2>
-        {schedule ? (
-          <div className="space-y-3">
-            <p><strong>{schedule.route?.from} to {schedule.route?.to}</strong></p>
-            <p className="flex items-center gap-2">
-              <Clock className="h-4 w-4" /> {new Date(schedule.departureTime).toLocaleTimeString()}
-            </p>
-            <p>Passengers: {schedule.bookedSeats || 0}/{schedule.vehicle?.capacity || 14}</p>
-            <button
-              onClick={() => setShowScanner(true)}
-              className="mt-4 w-full bg-indigo-600 text-white py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition"
-            >
-              <QrCode className="h-5 w-5" /> Scan Passenger QR
-            </button>
+      {/* EARNINGS CARD */}
+      <div className="max-w-6xl mx-auto mb-8">
+        <div className="backdrop-blur-xl bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-2xl p-6 text-white">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-green-100 text-sm font-medium">Today's Earnings</p>
+              <p className="text-5xl font-bold">KES {earnings.today.toLocaleString()}</p>
+            </div>
+            <DollarSign className="h-16 w-16 text-green-200" />
           </div>
-        ) : (
-          <p className="text-gray-500">No trip assigned yet</p>
-        )}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-green-400">
+            <div>
+              <p className="text-green-100 text-xs">Trips</p>
+              <p className="text-2xl font-bold">{earnings.tripCount}</p>
+            </div>
+            <div>
+              <p className="text-green-100 text-xs">Passengers</p>
+              <p className="text-2xl font-bold">{earnings.passengers}</p>
+            </div>
+            <div>
+              <p className="text-green-100 text-xs">Trip Earnings</p>
+              <p className="text-xl font-bold">KES {earnings.tripEarnings}</p>
+            </div>
+            <div>
+              <p className="text-green-100 text-xs">Parcel Earnings</p>
+              <p className="text-xl font-bold">KES {earnings.parcelEarnings}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* PARCELS */}
-      <div className="max-w-4xl mx-auto bg-white rounded-2xl shadow-xl p-6 mb-6">
-        <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-          <Package className="h-5 w-5" /> Parcels ({parcels.length})
-        </h2>
-        {parcels.length === 0 ? (
-          <p className="text-gray-500">No parcels assigned</p>
-        ) : (
-          <div className="space-y-3">
-            {parcels.map(p => (
-              <div key={p._id} className="p-3 bg-yellow-50 rounded-xl border border-yellow-300">
-                <p className="font-semibold">{p.description}</p>
-                <p className="text-sm">{p.pickup} to {p.dropoff}</p>
-                <p className="text-sm font-bold text-green-600">+ KES {p.fee}</p>
-                <button
-                  onClick={() => markDelivered(p._id)}
-                  className="mt-2 w-full bg-green-600 text-white py-2 rounded-lg text-sm hover:bg-green-700 transition"
-                >
-                  Mark Delivered
-                </button>
+      {/* TABS */}
+      <div className="max-w-6xl mx-auto mb-8">
+        <div className="flex gap-2 bg-white p-2 rounded-xl shadow-lg">
+          <button
+            onClick={() => setActiveTab('current')}
+            className={`flex-1 py-3 rounded-lg font-semibold transition-all ${
+              activeTab === 'current'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Navigation className="h-5 w-5 inline mr-2" />
+            Current Trip
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 py-3 rounded-lg font-semibold transition-all ${
+              activeTab === 'history'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <History className="h-5 w-5 inline mr-2" />
+            History
+          </button>
+          <button
+            onClick={() => setActiveTab('parcels')}
+            className={`flex-1 py-3 rounded-lg font-semibold transition-all ${
+              activeTab === 'parcels'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Package className="h-5 w-5 inline mr-2" />
+            Parcels ({parcels.length})
+          </button>
+        </div>
+      </div>
+
+      {/* CONTENT */}
+      <div className="max-w-6xl mx-auto">
+        {activeTab === 'current' && (
+          <div className="space-y-6">
+            {/* TRIP CARD */}
+            <div className="backdrop-blur-xl bg-white/90 rounded-2xl shadow-xl p-6 border border-white/30">
+              <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                <Navigation className="h-6 w-6 text-indigo-600" />
+                Current Trip
+              </h2>
+
+              {schedule ? (
+                <div className="space-y-6">
+                  {/* ROUTE INFO */}
+                  <div className="p-5 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xl font-bold text-indigo-900">{schedule.route?.name}</h3>
+                      <span className={`px-4 py-1.5 rounded-full text-sm font-bold ${
+                        schedule.status === 'scheduled' ? 'bg-yellow-100 text-yellow-800' :
+                        schedule.status === 'in_transit' ? 'bg-blue-100 text-blue-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {schedule.status === 'scheduled' ? '⏱️ Scheduled' :
+                         schedule.status === 'in_transit' ? '🚗 In Transit' : '✅ Completed'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-gray-700 mb-3">
+                      <MapPin className="h-5 w-5 text-indigo-600" />
+                      <span className="font-semibold">{schedule.route?.from}</span>
+                      <ChevronRight className="h-5 w-5" />
+                      <span className="font-semibold">{schedule.route?.to}</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-gray-500" />
+                        <span className="text-sm">
+                          {new Date(schedule.departureTime).toLocaleTimeString('en-KE', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZone: 'Africa/Nairobi'
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-gray-500" />
+                        <span className="text-sm font-bold">
+                          {schedule.bookedSeats}/{schedule.totalCapacity} passengers
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* TRIP ACTIONS */}
+                  <div className="flex gap-3">
+                    {schedule.status === 'scheduled' && (
+                      <button
+                        onClick={startTrip}
+                        className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:shadow-xl transform hover:scale-105 transition-all"
+                      >
+                        <Play className="h-5 w-5" /> Start Trip
+                      </button>
+                    )}
+                    {schedule.status === 'in_transit' && (
+                      <button
+                        onClick={completeTrip}
+                        className="flex-1 bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:shadow-xl transform hover:scale-105 transition-all"
+                      >
+                        <Square className="h-5 w-5" /> Complete Trip
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setShowScanner(true)}
+                      className="flex-1 bg-gradient-to-r from-purple-500 to-pink-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:shadow-xl transform hover:scale-105 transition-all"
+                    >
+                      <QrCode className="h-5 w-5" /> Scan QR
+                    </button>
+                  </div>
+
+                  {/* PASSENGERS LIST */}
+                  {schedule.passengers && schedule.passengers.length > 0 && (
+                    <div>
+                      <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+                        <Users className="h-5 w-5 text-indigo-600" />
+                        Passengers ({schedule.passengers.length})
+                      </h3>
+                      <div className="space-y-3 max-h-96 overflow-y-auto">
+                        {schedule.passengers.map((p) => (
+                          <div
+                            key={p.id}
+                            className={`p-4 rounded-xl border-2 transition-all ${
+                              p.boarded
+                                ? 'bg-green-50 border-green-300'
+                                : 'bg-gray-50 border-gray-200 hover:border-indigo-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <p className="font-bold text-gray-900">{p.name}</p>
+                                  {p.boarded && (
+                                    <span className="px-2 py-1 bg-green-500 text-white text-xs rounded-full font-bold">
+                                      ✓ Boarded
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                                  <Phone className="h-3 w-3" />
+                                  <span>{p.phone}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                  <MapPin className="h-3 w-3" />
+                                  <span>{p.pickup} → {p.dropoff}</span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-xl font-bold text-indigo-600">KES {p.fare}</p>
+                                {!p.boarded && (
+                                  <button
+                                    onClick={() => markBoarded(p.id)}
+                                    className="mt-2 px-4 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition"
+                                  >
+                                    Board
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ROUTE STOPS */}
+                  {schedule.route?.stops && schedule.route.stops.length > 0 && (
+                    <div>
+                      <h3 className="font-bold text-lg mb-3">Route Stops</h3>
+                      <div className="space-y-2">
+                        {schedule.route.stops.map((stop, i) => (
+                          <div
+                            key={i}
+                            className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg"
+                          >
+                            <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">
+                              {i + 1}
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-semibold">{stop.name}</p>
+                            </div>
+                            <p className="text-sm font-bold text-indigo-600">
+                              KES {stop.fareFromStart}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-gray-100 rounded-full mx-auto mb-4 flex items-center justify-center">
+                    <Navigation className="h-10 w-10 text-gray-400" />
+                  </div>
+                  <p className="text-xl font-semibold text-gray-700 mb-2">No Trip Assigned</p>
+                  <p className="text-gray-500">Wait for Sacco to assign your next trip</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div className="backdrop-blur-xl bg-white/90 rounded-2xl shadow-xl p-6 border border-white/30">
+            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+              <History className="h-6 w-6 text-indigo-600" />
+              Trip History
+            </h2>
+
+            {history.length === 0 ? (
+              <p className="text-center text-gray-500 py-12">No completed trips yet</p>
+            ) : (
+              <div className="space-y-3">
+                {history.map((trip) => (
+                  <div
+                    key={trip.id}
+                    className="p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl border border-gray-200 hover:border-indigo-300 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <p className="font-bold text-gray-900">{trip.route}</p>
+                        <p className="text-sm text-gray-600">
+                          {new Date(trip.date).toLocaleDateString('en-KE', {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {trip.passengers} passengers
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-green-600">
+                          KES {trip.earnings}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
+          </div>
+        )}
+
+        {activeTab === 'parcels' && (
+          <div className="backdrop-blur-xl bg-white/90 rounded-2xl shadow-xl p-6 border border-white/30">
+            <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+              <Package className="h-6 w-6 text-indigo-600" />
+              Assigned Parcels ({parcels.length})
+            </h2>
+
+            {parcels.length === 0 ? (
+              <p className="text-center text-gray-500 py-12">No parcels assigned</p>
+            ) : (
+              <div className="space-y-3">
+                {parcels.map((p) => (
+                  <div
+                    key={p._id}
+                    className="p-4 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl border-2 border-yellow-300"
+                  >
+                    <p className="font-bold text-gray-900 mb-2">{p.description}</p>
+                    <div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
+                      <MapPin className="h-4 w-4" />
+                      <span>{p.pickup} → {p.dropoff}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xl font-bold text-green-600">+ KES {p.fee}</p>
+                      <button
+                        onClick={() => markDelivered(p._id)}
+                        className="px-6 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 transition"
+                      >
+                        Mark Delivered
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* SOS */}
-      <div className="max-w-4xl mx-auto">
+      {/* SOS BUTTON */}
+      <div className="max-w-6xl mx-auto mt-8">
         <button
           onClick={sendSOS}
-          className="w-full bg-red-600 text-white py-4 rounded-xl text-xl font-bold flex items-center justify-center gap-2 hover:bg-red-700 transition"
+          className="w-full bg-gradient-to-r from-red-600 to-red-700 text-white py-5 rounded-xl text-xl font-bold flex items-center justify-center gap-3 hover:shadow-2xl transform hover:scale-105 transition-all"
         >
-          <AlertCircle className="h-6 w-6" /> EMERGENCY SOS
+          <AlertCircle className="h-7 w-7" />
+          🚨 EMERGENCY SOS
         </button>
       </div>
 
       {/* QR SCANNER MODAL */}
       {showScanner && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full relative">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full relative">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg">Scan Passenger QR</h3>
+              <h3 className="font-bold text-xl">Scan Passenger QR</h3>
               <button
-                onClick={() => { setShowScanner(false); stopScanner(); }}
+                onClick={() => {
+                  setShowScanner(false);
+                  stopScanner();
+                }}
                 className="text-gray-500 hover:text-gray-700"
               >
-                <X className="h-5 w-5" />
+                <X className="h-6 w-6" />
               </button>
             </div>
             <div className="relative">
-              <video ref={videoRef} className="w-full rounded-lg" />
+              <video ref={videoRef} className="w-full rounded-xl" />
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="border-2 border-red-500 w-64 h-64 rounded-lg opacity-70"></div>
+                <div className="border-4 border-red-500 w-64 h-64 rounded-xl opacity-70"></div>
               </div>
             </div>
+            <p className="text-center text-sm text-gray-600 mt-4">
+              Position the QR code within the frame
+            </p>
           </div>
         </div>
       )}
