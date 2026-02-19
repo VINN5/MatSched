@@ -7,6 +7,7 @@ import {
   Users, Play, Square, MapPin, Phone, TrendingUp, History, Car, ChevronRight
 } from 'lucide-react';
 import QrScanner from 'qr-scanner';
+import MapView from './MapView';
 
 export default function DriverDashboard() {
   const { user } = useAuth();
@@ -22,10 +23,12 @@ export default function DriverDashboard() {
   });
   const [history, setHistory] = useState([]);
   const [vehicle, setVehicle] = useState(null);
-  const [activeTab, setActiveTab] = useState('current'); // current, history, earnings
+  const [activeTab, setActiveTab] = useState('current'); // current, history, parcels
   const [showScanner, setShowScanner] = useState(false);
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [routeInfo, setRouteInfo] = useState(null);
 
   const videoRef = useRef(null);
   let qrScanner = null;
@@ -73,6 +76,34 @@ export default function DriverDashboard() {
       fetchHistory();
     }
   }, [activeTab]);
+
+  // === GPS TRACKING ===
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          setCurrentLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy
+          });
+        },
+        (error) => {
+          console.error('GPS error:', error);
+          // Don't show toast on every error, just log it
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0
+        }
+      );
+
+      return () => navigator.geolocation.clearWatch(watchId);
+    } else {
+      console.log('GPS not supported on this device');
+    }
+  }, []);
 
   // === TRIP ACTIONS ===
   const startTrip = async () => {
@@ -165,7 +196,7 @@ export default function DriverDashboard() {
     if (!window.confirm('Send EMERGENCY SOS to Sacco control?')) return;
     try {
       await api.post('/driver/sos', {
-        location: 'GPS data here', // TODO: Get actual GPS
+        location: currentLocation ? `${currentLocation.latitude}, ${currentLocation.longitude}` : 'GPS unavailable',
         issue: 'Emergency assistance needed'
       });
       showToast('🚨 SOS sent to Sacco!', 'success');
@@ -189,9 +220,12 @@ export default function DriverDashboard() {
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 p-4 md:p-6">
       {/* TOAST */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-xl text-white flex items-center gap-3 shadow-2xl ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
+        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-xl text-white flex items-center gap-3 shadow-2xl animate-in slide-in-from-top duration-300 ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
           {toast.type === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
           <span className="font-medium">{toast.msg}</span>
+          <button onClick={() => setToast(null)}>
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
 
@@ -366,6 +400,43 @@ export default function DriverDashboard() {
                     </button>
                   </div>
 
+                  {/* MAP VIEW */}
+                  <div className="h-96 md:h-[500px]">
+                    <MapView
+                      schedule={schedule}
+                      currentLocation={currentLocation}
+                      onRouteUpdate={(info) => setRouteInfo(info)}
+                    />
+                  </div>
+
+                  {/* ROUTE INFO FROM MAP */}
+                  {routeInfo && (
+                    <div className="grid grid-cols-3 gap-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
+                      <div className="text-center">
+                        <p className="text-xs text-gray-600 mb-1">Distance</p>
+                        <p className="text-2xl font-bold text-indigo-600">
+                          {(routeInfo.distance / 1000).toFixed(1)} km
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-gray-600 mb-1">Duration</p>
+                        <p className="text-2xl font-bold text-indigo-600">
+                          {Math.round(routeInfo.duration / 60)} min
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-xs text-gray-600 mb-1">Traffic</p>
+                        <p className={`text-2xl font-bold capitalize ${
+                          routeInfo.trafficLevel === 'heavy' ? 'text-red-600' :
+                          routeInfo.trafficLevel === 'moderate' ? 'text-yellow-600' :
+                          'text-green-600'
+                        }`}>
+                          {routeInfo.trafficLevel}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* PASSENGERS LIST */}
                   {schedule.passengers && schedule.passengers.length > 0 && (
                     <div>
@@ -430,11 +501,20 @@ export default function DriverDashboard() {
                             key={i}
                             className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg"
                           >
-                            <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold text-sm">
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm text-white ${
+                              i === 0 ? 'bg-green-600' :
+                              i === schedule.route.stops.length - 1 ? 'bg-red-600' :
+                              'bg-indigo-600'
+                            }`}>
                               {i + 1}
                             </div>
                             <div className="flex-1">
                               <p className="font-semibold">{stop.name}</p>
+                              {stop.latitude && stop.longitude && (
+                                <p className="text-xs text-gray-500">
+                                  {stop.latitude.toFixed(4)}, {stop.longitude.toFixed(4)}
+                                </p>
+                              )}
                             </div>
                             <p className="text-sm font-bold text-indigo-600">
                               KES {stop.fareFromStart}
@@ -482,7 +562,8 @@ export default function DriverDashboard() {
                             month: 'short',
                             day: 'numeric',
                             hour: '2-digit',
-                            minute: '2-digit'
+                            minute: '2-digit',
+                            timeZone: 'Africa/Nairobi'
                           })}
                         </p>
                         <p className="text-sm text-gray-600 mt-1">
