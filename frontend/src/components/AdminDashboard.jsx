@@ -171,8 +171,8 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!token || !saccoId) return;
 
-    const socket = io(import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'https://matsched.onrender.com', { 
-      withCredentials: true 
+    const socket = io(import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'https://matsched.onrender.com', {
+      withCredentials: true
     });
     socket.emit('join-sacco', saccoId);
 
@@ -278,9 +278,8 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-900 dark:to-gray-800 p-4 md:p-6">
       {/* TOAST */}
       {toast && (
-        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl text-white transition-all animate-in slide-in-from-top duration-300 ${
-          toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-        }`}>
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-6 py-4 rounded-xl shadow-2xl text-white transition-all animate-in slide-in-from-top duration-300 ${toast.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+          }`}>
           {toast.type === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
           <span className="font-medium">{toast.message}</span>
           <button onClick={() => setToast(null)} className="ml-4">
@@ -601,7 +600,11 @@ export default function AdminDashboard() {
                 <div key={s._id} className="p-3 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl">
                   <p className="font-semibold">{s.route?.name || 'Unknown'}</p>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {s.vehicle?.plate || 'N/A'} | {new Date(s.departureTime).toLocaleString('en-KE', { hour: '2-digit', minute: '2-digit' })}
+                    {s.vehicle?.plate || 'N/A'} | {new Date(s.departureTime).toLocaleString('en-KE', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: 'Africa/Nairobi'
+                    })}
                   </p>
                   <p className="text-xs text-purple-700 dark:text-purple-300">
                     KES {s.route?.price} + 2 KES fee

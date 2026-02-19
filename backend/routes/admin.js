@@ -217,7 +217,13 @@ router.post('/schedules', auth, roleCheck(['sacco_admin']), async (req, res) => 
     }
 
     const sacco = await require('../models/sacco').findById(saccoId).select('name');
-    const departure = new Date(departureTime);
+    
+    // === FIX: Parse datetime-local as Kenya time (UTC+3) ===
+    const departureParts = departureTime.split('T');
+    const datePart = departureParts[0];
+    const timePart = departureParts[1];
+    // Create date in Kenya timezone (UTC+3)
+    const departure = new Date(`${datePart}T${timePart}+03:00`);
 
     // === TRAFFIC MULTIPLIER ===
     const hour = departure.getHours();
